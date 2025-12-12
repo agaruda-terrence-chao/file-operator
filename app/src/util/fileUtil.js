@@ -53,7 +53,7 @@ exports.readFile = async (filePath) => {
   })
 }
 
-exports.readDir = async (filePath) => {
+exports.readDir = async (filePath, filterByName) => {
   const payload = {
     isDirectory: true,
     files: []
@@ -68,6 +68,9 @@ exports.readDir = async (filePath) => {
       file = isFile(file) ? file : file.concat('/')
       payload.files.push(file)
     }
+
+    // 先过滤，减少后续处理的数据量
+    payload.files = filteredByName(payload.files, filterByName)
   } catch (err) {
     console.error(err)
     return { err: 'not a valid directory path' }
@@ -76,7 +79,7 @@ exports.readDir = async (filePath) => {
   return payload
 }
 
-exports.readDirByOrder = async (filePath, orderBy, orderByDirection) => {
+exports.readDirByOrder = async (filePath, orderBy, orderByDirection, filterByName) => {
   const payload = {
     isDirectory: true,
     files: []
@@ -91,6 +94,9 @@ exports.readDirByOrder = async (filePath, orderBy, orderByDirection) => {
       file = isFile(file) ? file : file.concat('/')
       payload.files.push(file)
     }
+
+    // 优化：先过滤再排序，减少不必要的文件系统 I/O（stat 调用）
+    payload.files = filteredByName(payload.files, filterByName)
 
     try {
       const orderFileFunc = orderFileUtil[orderBy]
@@ -107,13 +113,15 @@ exports.readDirByOrder = async (filePath, orderBy, orderByDirection) => {
   return payload
 }
 
-exports.filteredByName = (files, filterByName) => {
+function filteredByName (files, filterByName) {
   if (filterByName != null) {
     filterByName = filterByName.toLowerCase()
     files = files.filter(str => str.toLowerCase().includes(filterByName))
   }
   return files
 }
+
+exports.filteredByName = filteredByName
 
 exports.write = async (filePath, content) => {
   return new Promise(resolve => {

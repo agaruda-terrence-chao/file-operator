@@ -14,10 +14,11 @@ FileService.prototype.read = async function (filePath, query) {
     if (futil.isFile(filePath)) {
       return await futil.readFile(filePath)
     } else {
-      const payload = await readDirFunc(filePath, orderBy, orderByDirection)
-      if (!payload.err) {
-        payload.files = futil.filteredByName(payload.files, filterByName)
-      }
+      // 优化：将 filterByName 传递给 readDir 函数，在排序前先过滤
+      // 这样可以减少不必要的文件系统 I/O（特别是 stat 调用）
+      const payload = (orderBy == null)
+        ? await readDirFunc(filePath, filterByName)
+        : await readDirFunc(filePath, orderBy, orderByDirection, filterByName)
 
       return payload
     }
