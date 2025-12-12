@@ -1,6 +1,7 @@
 var express = require('express')
 var router = express.Router()
 var multer = require('multer')
+var path = require('path')
 var { fileValidator } = require('./request/fileValidator')
 const futil = require('../util/fileUtil')
 const FileService = require('../services/fileService')
@@ -32,7 +33,8 @@ module.exports = router
     fileValidator,
     async (req, res, next) => {
       // TODO 英文以外的無法解析
-      const filePath = futil.getPath(req).concat(req.file.originalname)
+      const basePath = futil.getPath(req)
+      const filePath = path.join(basePath, req.file.originalname).replace(/\\/g, '/')
       res.locals.data = await fileService.create(filePath, req.file)
       next()
     },
@@ -43,7 +45,8 @@ module.exports = router
     fileValidator,
     async (req, res, next) => {
       // TODO 英文以外的無法解析
-      const filePath = futil.getPath(req).concat(req.file.originalname)
+      const basePath = futil.getPath(req)
+      const filePath = path.join(basePath, req.file.originalname).replace(/\\/g, '/')
       res.locals.data = await fileService.patch(filePath, req.file)
       next()
     },
