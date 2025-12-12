@@ -1,0 +1,22 @@
+version: "3"
+services:
+  app:
+    build:
+      context: ./app
+    container_name: hp-nodejs-app
+    ports:
+      - 3001-3016:3001-3016
+    restart: always
+    tty: true
+
+  proxy:
+    image: nginx:1.20-alpine
+    container_name: hp-proxy
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
+    links:
+      - app
+    ports:
+      - 3000:3000
+    restart: always
+
