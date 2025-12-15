@@ -56,10 +56,11 @@ FileService.prototype.patch = async function (filePath, file) {
 
 FileService.prototype.delete = async function (filePath) {
   try {
-    if (!futil.isFile(filePath)) {
-      return { err: 'is a directory' }
-    } else if (!await futil.isExists(filePath)) {
+    // 优化：先检查文件是否存在，再检查类型，减少不必要的操作
+    if (!await futil.isExists(filePath)) {
       return { err: 'file doesn\'t exists' }
+    } else if (!futil.isFile(filePath)) {
+      return { err: 'is a directory' }
     } else {
       return await futil.delete(filePath)
     }

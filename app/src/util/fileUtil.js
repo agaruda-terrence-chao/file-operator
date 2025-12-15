@@ -7,7 +7,15 @@ const orderFileUtil = require('./orderFileUtil')
 const CHUNK_BYTES = parseInt(process.env.CHUNK_BYTES)
 
 function isFile (filePath) {
-  return filePath.slice(-1) !== '.' && filePath.lastIndexOf('.') > filePath.lastIndexOf('/')
+  // 优化：更健壮的文件名判断逻辑
+  // 排除以 '/' 结尾的目录标识，以及没有扩展名的隐藏文件（以 '.' 开头）
+  if (filePath.endsWith('/')) {
+    return false
+  }
+  const lastDotIndex = filePath.lastIndexOf('.')
+  const lastSlashIndex = filePath.lastIndexOf('/')
+  // 有扩展名且扩展名在最后一个 '/' 之后
+  return lastDotIndex > lastSlashIndex && lastDotIndex > 0
 }
 
 function isExists (filePath) {
@@ -53,7 +61,8 @@ exports.readFile = async (filePath) => {
   })
 }
 
-exports.readDir = async (filePath, filterByName) => {
+// 提取公共逻辑：读取目录并处理文件名
+async function readDirFiles (filePath) {
   const payload = {
     isDirectory: true,
     files: []
@@ -68,9 +77,6 @@ exports.readDir = async (filePath, filterByName) => {
       file = isFile(file) ? file : file.concat('/')
       payload.files.push(file)
     }
-
-    // 先过滤，减少后续处理的数据量
-    payload.files = filteredByName(payload.files, filterByName)
   } catch (err) {
     console.error(err)
     return { err: 'not a valid directory path' }
@@ -79,35 +85,35 @@ exports.readDir = async (filePath, filterByName) => {
   return payload
 }
 
-exports.readDirByOrder = async (filePath, orderBy, orderByDirection, filterByName) => {
-  const payload = {
-    isDirectory: true,
-    files: []
+exports.readDir = async (filePath, filterByName) => {
+  const payload = await readDirFiles(filePath)
+  if (payload.err) {
+    return payload
   }
+
+  // 先过滤，减少后续处理的数据量
+  payload.files = filteredByName(payload.files, filterByName)
+  return payload
+}
+
+exports.readDirByOrder = async (filePath, orderBy, orderByDirection, filterByName) => {
+  const payload = await readDirFiles(filePath)
+  if (payload.err) {
+    return payload
+  }
+
+  // 优化：先过滤再排序，减少不必要的文件系统 I/O（stat 调用）
+  payload.files = filteredByName(payload.files, filterByName)
+
   try {
-    const files = await fsp.readdir(filePath)
-    if (files.length === 0) {
-      return payload
-    }
-
-    for (let file of files) {
-      file = isFile(file) ? file : file.concat('/')
-      payload.files.push(file)
-    }
-
-    // 优化：先过滤再排序，减少不必要的文件系统 I/O（stat 调用）
-    payload.files = filteredByName(payload.files, filterByName)
-
-    try {
-      const orderFileFunc = orderFileUtil[orderBy]
-      payload.files = await orderFileFunc(filePath, payload.files, orderByDirection)
-    } catch (err) {
-      console.error(err)
+    const orderFileFunc = orderFileUtil[orderBy]
+    if (!orderFileFunc) {
       return { err: 'invalid order condition. should be orderBy=lastModified; orderBy=size; orderBy=fileName; ' }
     }
+    payload.files = await orderFileFunc(filePath, payload.files, orderByDirection)
   } catch (err) {
     console.error(err)
-    return { err: 'not a valid directory path' }
+    return { err: 'invalid order condition. should be orderBy=lastModified; orderBy=size; orderBy=fileName; ' }
   }
 
   return payload
